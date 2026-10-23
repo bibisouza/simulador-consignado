@@ -3,7 +3,10 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { z } from "zod";
 import { simulationRequestSchema } from "@/domain/simulation";
+import type { BankResult } from "@/domain/bank-result";
 import type { SimulationOutcome } from "@/domain/simulation-outcome";
+import type { StreamEvent } from "@/domain/stream-events";
+import { readNdjson } from "@/lib/ndjson";
 import { formatCnpjInput, formatCpfInput } from "@/lib/format";
 import { Field } from "./Field";
 import { Results } from "./Results";
@@ -22,6 +25,13 @@ type FormValues = {
 
 type FieldErrors = Partial<Record<string, string>>;
 type Status = "idle" | "loading" | "done";
+
+type Live = {
+  requestedAmount: number;
+  banks: { id: string; name: string }[];
+  results: Record<string, BankResult>;
+  summary: SimulationOutcome["summary"] | null;
+};
 
 const INITIAL: FormValues = {
   name: "",
@@ -65,9 +75,7 @@ export function SimulationForm() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("idle");
-  const [result, setResult] = useState<{ outcome: SimulationOutcome; requestedAmount: number } | null>(
-    null,
-  );
+  const [live, setLive] = useState<Live | null>(null);
 
   /** Props comuns de cada campo: valor, onChange (com máscara opcional) e acessibilidade. */
   const bind = (name: keyof FormValues, mask?: (value: string) => string) => ({
@@ -98,11 +106,11 @@ export function SimulationForm() {
 
     setErrors({});
     setFormError(null);
-    setResult(null);
+    setLive(null);
     setStatus("loading");
 
     try {
-      const res = await fetch("/api/simulations", {
+      const res = await fetch("/api/simulations/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -115,10 +123,48 @@ export function SimulationForm() {
         setStatus("idle");
         return;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
-      const outcome = (await res.json()) as SimulationOutcome;
-      setResult({ outcome, requestedAmount: payload.requestedAmount });
+      // 3) Cada evento atualiza a tela na hora.
+      let finished = false;
+      for await (const raw of readNdjson(res.body)) {
+        const streamEvent = raw as StreamEvent;
+        switch (streamEvent.type) {
+          case "started":
+            setLive({
+              requestedAmount: payload.requestedAmount,
+              banks: streamEvent.banks,
+              results: {},
+              summary: null,
+            });
+            break;
+          case "bank":
+            setLive((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    results: { ...prev.results, [streamEvent.result.bankId]: streamEvent.result },
+                  }
+                : prev,
+            );
+            break;
+          case "done":
+            finished = true;
+            setLive((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    results: Object.fromEntries(streamEvent.outcome.results.map((r) => [r.bankId, r])),
+                    summary: streamEvent.outcome.summary,
+                  }
+                : prev,
+            );
+            break;
+        }
+      }
+
+      // Se a resposta acabou sem o "done", algo falhou no meio do caminho.
+      if (!finished) throw new Error("stream encerrado antes do fim");
       setStatus("done");
     } catch {
       setFormError("Não foi possível concluir a simulação agora. Tente novamente em instantes.");
@@ -206,12 +252,20 @@ export function SimulationForm() {
         </button>
         {loading && (
           <p className="note" aria-live="polite">
-            Isso pode levar alguns segundos: cada banco responde no seu tempo.
+            Os bancos aparecem abaixo assim que responderem.
           </p>
         )}
       </form>
 
-      {result && <Results outcome={result.outcome} requestedAmount={result.requestedAmount} />}
+      {live && (
+        <Results
+          banks={live.banks}
+          results={live.results}
+          summary={live.summary}
+          loading={loading}
+          requestedAmount={live.requestedAmount}
+        />
+      )}
     </>
   );
 }

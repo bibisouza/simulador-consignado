@@ -58,32 +58,55 @@ function BankCard({ result, isBest, requestedAmount }: CardProps) {
   }
 }
 
-export function Results({
-  outcome,
-  requestedAmount,
-}: {
-  outcome: SimulationOutcome;
+function PendingCard({ name }: { name: string }) {
+  return (
+    <article className="card card--pending" aria-busy="true">
+      <header>
+        <h3>{name}</h3>
+        <span className="badge badge--pending">Consultando…</span>
+      </header>
+      <div className="skeleton" />
+      <div className="skeleton skeleton--short" />
+    </article>
+  );
+}
+
+type ResultsProps = {
+  banks: { id: string; name: string }[];
+  results: Record<string, BankResult>;
+  summary: SimulationOutcome["summary"] | null;
+  loading: boolean;
   requestedAmount: number;
-}) {
-  const { results, summary } = outcome;
+};
+
+export function Results({ banks, results, summary, loading, requestedAmount }: ResultsProps) {
+  const answered = Object.keys(results).length;
+
   return (
     <section className="results" aria-live="polite">
       <h2>Resultado da simulação</h2>
       <p className="summary">
-        Aprovadas: {summary.approved} · Reprovadas: {summary.rejected} · Indisponíveis:{" "}
-        {summary.unavailable}
+        {summary
+          ? `Aprovadas: ${summary.approved} · Reprovadas: ${summary.rejected} · Indisponíveis: ${summary.unavailable}`
+          : `${answered} de ${banks.length} bancos responderam…`}
       </p>
       <div className="cards">
-        {results.map((result) => (
-          <BankCard
-            key={result.bankId}
-            result={result}
-            isBest={result.bankId === summary.bestOfferBankId}
-            requestedAmount={requestedAmount}
-          />
-        ))}
+        {banks.map((bank) => {
+          const result = results[bank.id];
+          if (result) {
+            return (
+              <BankCard
+                key={bank.id}
+                result={result}
+                isBest={summary?.bestOfferBankId === bank.id}
+                requestedAmount={requestedAmount}
+              />
+            );
+          }
+          return loading ? <PendingCard key={bank.id} name={bank.name} /> : null;
+        })}
       </div>
-      {summary.unavailable > 0 && (
+      {summary && summary.unavailable > 0 && (
         <p className="note">
           Algum banco não respondeu. Você pode simular novamente para tentar consultá-lo outra vez.
         </p>

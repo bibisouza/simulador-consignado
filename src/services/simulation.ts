@@ -16,6 +16,8 @@ export type SimulationOptions = {
   maxAttempts?: number;
   retryDelayMs?: number;
   logger?: Logger;
+  /** Chamado logo no início, com a lista de bancos que serão consultados. */
+  onStart?: (info: { simulationId: string; banks: { id: string; name: string }[] }) => void;
   /** Chamado assim que cada banco responde (base para mostrar resultados em tempo real). */
   onBankResult?: (result: BankResult) => void;
 };
@@ -59,7 +61,9 @@ async function attemptOnce(
   }
 }
 
-type Context = Required<Pick<SimulationOptions, "timeoutMs" | "maxAttempts" | "retryDelayMs" | "logger">> & {
+type Context = Required<
+  Pick<SimulationOptions, "timeoutMs" | "maxAttempts" | "retryDelayMs" | "logger">
+> & {
   simulationId: string;
 };
 
@@ -119,6 +123,7 @@ export async function runSimulation(
     maxAttempts = 2,
     retryDelayMs = 200,
     logger = consoleLogger,
+    onStart,
     onBankResult,
   } = options;
 
@@ -132,6 +137,15 @@ export async function runSimulation(
   };
 
   logger.info("simulation.started", { simulationId, banks: providers.length });
+
+  try {
+    onStart?.({
+      simulationId,
+      banks: providers.map((p) => ({ id: p.id, name: p.name })),
+    });
+  } catch {
+    logger.warn("simulation.callback_failed", { simulationId });
+  }
 
   // Cada consultBank trata as próprias falhas, então um banco ruim não derruba os outros.
   const results = await Promise.all(

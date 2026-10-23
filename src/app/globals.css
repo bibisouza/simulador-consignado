@@ -261,3 +261,34 @@ button[type="submit"]:disabled {
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+.card--pending {
+  border-left-color: var(--accent);
+}
+.badge--pending {
+  color: var(--primary);
+  background: var(--bg);
+}
+
+.skeleton {
+  height: 14px;
+  margin: 10px 0;
+  background: var(--border);
+  border-radius: 6px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.skeleton--short {
+  width: 60%;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
