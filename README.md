@@ -43,8 +43,8 @@ Dados válidos (todos fictícios):
 
 Cenários úteis:
 
-- **Salário baixo** (ex.: `1000` com valor `20000`): geram reprovações e, no Banco Aurora, uma **contraproposta** com valor menor.
-- **Repetir a simulação várias vezes:** o Banco Cedro falha de propósito em cerca de 30% das chamadas (trava, erro 503 ou resposta malformada), então em algum momento ele aparece como **Indisponível**.
+- **Renda baixa** (ex.: salário `1000`, valor `20000`): os três bancos reprovam, cada um com o seu motivo.
+- **Contraproposta** (ex.: salário `2000`, valor `20000`): o Banco Aurora aprova um valor menor que o pedido (o máximo que cabe na margem), e os outros bancos reprovam por margem. A tela avisa que o valor é menor que o solicitado.
 
 ### Para testar a API direto
 
